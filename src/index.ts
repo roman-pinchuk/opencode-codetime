@@ -232,6 +232,21 @@ function formatMinutes(minutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
+/**
+ * Format a project field for display by wrapping the suffix in brackets.
+ * If the field already contains '[', it's returned as-is.
+ * Otherwise, everything after the first space is treated as a suffix.
+ * E.g. "test WSL: Ubuntu-24.04" → "test [WSL: Ubuntu-24.04]"
+ */
+function formatProjectName(field: string): string {
+  if (field.includes("[")) return field;
+  const spaceIdx = field.indexOf(" ");
+  if (spaceIdx === -1) return field;
+  const name = field.substring(0, spaceIdx);
+  const suffix = field.substring(spaceIdx + 1);
+  return `${name} [${suffix}]`;
+}
+
 // ---- Plugin entry point ----
 
 export const plugin: Plugin = async (ctx) => {
@@ -404,20 +419,34 @@ export const plugin: Plugin = async (ctx) => {
                   0,
                 );
 
-                // Find the longest project name for alignment
+                // Pre-compute display names and formatted times
+                const displayNames = projects.map((p) =>
+                  formatProjectName(p.field),
+                );
+                const formattedTimes = projects.map((p) =>
+                  formatMinutes(p.minutes),
+                );
+                const totalTime = formatMinutes(totalMinutes);
+
+                // Find the longest display name and time for alignment
                 const maxNameLen = Math.max(
-                  ...projects.map((p) => p.field.length),
+                  ...displayNames.map((n) => n.length),
                   "Total".length,
+                );
+                const maxTimeLen = Math.max(
+                  ...formattedTimes.map((t) => t.length),
+                  totalTime.length,
                 );
 
                 const lines = ["Today's coding time by project:", ""];
-                for (const p of projects) {
-                  const name = p.field.padEnd(maxNameLen + 2);
-                  lines.push(`  ${name}${formatMinutes(p.minutes)}`);
+                for (let i = 0; i < projects.length; i++) {
+                  const name = displayNames[i].padEnd(maxNameLen + 2);
+                  const time = formattedTimes[i].padStart(maxTimeLen);
+                  lines.push(`  ${name}${time}`);
                 }
-                lines.push(`  ${"─".repeat(maxNameLen + 2 + 8)}`);
+                lines.push(`  ${"─".repeat(maxNameLen + 2 + maxTimeLen)}`);
                 lines.push(
-                  `  ${"Total".padEnd(maxNameLen + 2)}${formatMinutes(totalMinutes)}`,
+                  `  ${"Total".padEnd(maxNameLen + 2)}${totalTime.padStart(maxTimeLen)}`,
                 );
 
                 return lines.join("\n");
