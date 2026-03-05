@@ -1,0 +1,38 @@
+{
+  "name": "opencode-codetime",
+  "version": "0.1.0",
+  "description": "CodeTime plugin for OpenCode - Track AI coding activity and time spent with codetime.dev",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "codetime",
+    "coding-time",
+    "time-tracking",
+    "opencode-plugin"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^25.3.3",
+    "typescript": "^5.0.0"
+  }
+}
