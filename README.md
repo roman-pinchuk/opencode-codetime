@@ -1,12 +1,20 @@
 # opencode-codetime
 
+[![npm version](https://img.shields.io/npm/v/opencode-codetime)](https://www.npmjs.com/package/opencode-codetime)
+[![npm downloads](https://img.shields.io/npm/dm/opencode-codetime)](https://www.npmjs.com/package/opencode-codetime)
+[![license](https://img.shields.io/npm/l/opencode-codetime)](https://github.com/roman-pinchuk/opencode-codetime/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/roman-pinchuk/opencode-codetime)](https://github.com/roman-pinchuk/opencode-codetime/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/roman-pinchuk/opencode-codetime/publish.yml?label=publish)](https://github.com/roman-pinchuk/opencode-codetime/actions)
+
 [CodeTime](https://codetime.dev) plugin for [OpenCode](https://github.com/anomalyco/opencode) -- track your AI coding activity and time spent.
 
 ## Features
 
 - **Automatic time tracking** -- sends coding events to CodeTime when OpenCode reads, edits, or writes files
+- **Check your coding time** -- ask the AI "what's my coding time?" and it fetches your stats via the `codetime` tool
 - **Language detection** -- detects 90+ programming languages from file extensions
 - **Git integration** -- captures current branch and remote origin
+- **Project identification** -- shows as `[opencode] project-name` on your CodeTime dashboard
 - **Rate-limited** -- one heartbeat per 2 minutes to avoid API spam
 - **Session lifecycle** -- flushes pending events on session end so no data is lost
 - **Zero config** -- just set your token and go
@@ -81,7 +89,7 @@ Each heartbeat sent to CodeTime includes:
 |-------|-------|
 | `eventTime` | Unix timestamp of the event |
 | `language` | Detected from file extension (e.g. `TypeScript`, `Python`) |
-| `project` | Current directory name |
+| `project` | `[opencode] directory-name` |
 | `relativeFile` | File path relative to the project root |
 | `editor` | `opencode` |
 | `platform` | OS platform (`darwin`, `linux`, `windows`) |
@@ -94,6 +102,7 @@ Each heartbeat sent to CodeTime includes:
 |------|---------|
 | `event` | Listens for `message.part.updated` (tool completions) and `session.idle`/`session.deleted` (flush) |
 | `chat.message` | Processes pending heartbeats on chat activity |
+| `tool` | Registers `codetime` tool to check today's coding time |
 
 ### Tool tracking
 
