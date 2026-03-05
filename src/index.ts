@@ -431,7 +431,9 @@ export const plugin: Plugin = async (ctx) => {
                   `  ${"Total".padEnd(maxNameLen + 2)}${totalTime.padStart(maxTimeLen)}`,
                 );
 
-                return lines.join("\n");
+                const header = lines[0];
+                const table = lines.slice(1).join("\n");
+                return `${header}\n\`\`\`\n${table}\n\`\`\``;
               }
 
               // Project-specific mode
