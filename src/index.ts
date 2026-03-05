@@ -1,9 +1,11 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { Plugin } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 import {
   sendHeartbeat,
   validateToken,
+  getTodayMinutes,
   type EventLogRequest,
 } from "./codetime.js";
 import { getGitBranch, getGitOrigin } from "./git.js";
@@ -200,6 +202,17 @@ function pruneProcessedIds(): void {
   }
 }
 
+// ---- Time formatting ----
+
+function formatMinutes(minutes: number): string {
+  if (minutes < 1) return "0m";
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 // ---- Plugin entry point ----
 
 export const plugin: Plugin = async (ctx) => {
@@ -241,7 +254,7 @@ export const plugin: Plugin = async (ctx) => {
     initState();
     _projectDir = directory;
     _worktree = worktree;
-    _projectName = path.basename(directory);
+    _projectName = `[opencode] ${path.basename(directory)}`;
     _platform = os.platform();
 
     // Fetch git info
@@ -311,6 +324,33 @@ export const plugin: Plugin = async (ctx) => {
         } catch (err) {
           await error("Chat message handler error", { error: String(err) }).catch(() => {});
         }
+      },
+
+      tool: {
+        codetime: tool({
+          description:
+            "Show today's coding time tracked by CodeTime. " +
+            "Use this when the user asks about their coding time, " +
+            "how long they've been coding, or wants to see their CodeTime stats.",
+          args: {},
+          async execute() {
+            if (!_token) {
+              return "CodeTime is not configured. Set CODETIME_TOKEN environment variable to enable tracking. Get your token from https://codetime.dev/dashboard/settings";
+            }
+
+            try {
+              const minutes = await getTodayMinutes(_token);
+              if (minutes === null) {
+                return "Failed to fetch coding time from CodeTime API.";
+              }
+
+              const formatted = formatMinutes(minutes);
+              return `Today's coding time: ${formatted}`;
+            } catch (err) {
+              return `Failed to fetch coding time: ${String(err)}`;
+            }
+          },
+        }),
       },
     };
   } catch (err) {
