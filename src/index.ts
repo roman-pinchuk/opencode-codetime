@@ -59,11 +59,9 @@ const processedCallIds = new Set<string>();
 const pendingFiles = new Map<string, { language: string; absoluteFile?: string }>();
 
 let _token: string | null = null;
-let _client: ReturnType<typeof import("@opencode-ai/sdk").createOpencodeClient> | null = null;
 let _projectName = "unknown";
 let _projectDir = "";
 let _worktree = "";
-let _shellFn: Parameters<typeof getGitOrigin>[0] | null = null;
 let _gitOrigin: string | null = null;
 let _gitBranch: string | null = null;
 let _gitInfoFetched = false;
@@ -143,11 +141,11 @@ function computeRelativeFile(absoluteFile: string, projectDir: string): string {
 // ---- Lazy git info ----
 
 async function ensureGitInfo(): Promise<void> {
-  if (_gitInfoFetched || !_shellFn || !_worktree) return;
+  if (_gitInfoFetched || !_worktree) return;
   _gitInfoFetched = true;
   try {
-    _gitOrigin = await getGitOrigin(_shellFn, _worktree);
-    _gitBranch = await getGitBranch(_shellFn, _worktree);
+    _gitOrigin = await getGitOrigin(_worktree);
+    _gitBranch = await getGitBranch(_worktree);
     await debug("Git info", { origin: _gitOrigin, branch: _gitBranch }).catch(() => {});
   } catch {
     // Git info is optional, continue without it
@@ -236,7 +234,7 @@ function formatMinutes(minutes: number): string {
 
 export const plugin: Plugin = async (ctx) => {
   try {
-    const { client, directory, worktree, $ } = ctx;
+    const { client, directory, worktree } = ctx;
 
     // Initialize logger (may fail if client shape differs)
     try {
@@ -271,14 +269,10 @@ export const plugin: Plugin = async (ctx) => {
 
     // Initialize state
     initState();
-    _client = client as typeof _client;
     _projectDir = directory;
     _worktree = worktree;
     _projectName = `${path.basename(directory)} [opencode]`;
     _platform = os.platform();
-
-    // Store shell function for lazy git info fetching
-    _shellFn = $ as Parameters<typeof getGitOrigin>[0];
 
     return {
       event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
@@ -341,44 +335,15 @@ export const plugin: Plugin = async (ctx) => {
         }
       },
 
-      "command.execute.before": async (input, output) => {
-        try {
-          if (input.command !== "codetime") return;
-
-          if (!_token || !_client) {
-            await _client?.tui.showToast({
-              body: { message: "CodeTime: token not configured", variant: "error" as const },
-            }).catch(() => {});
-            output.parts.push({
-              type: "text",
-              text: "CodeTime is not configured. Set `CODETIME_TOKEN` environment variable to enable tracking.\nGet your token from https://codetime.dev/dashboard/settings",
-            } as any);
-            return;
-          }
-
-          const minutes = await getTodayMinutes(_token);
-          if (minutes === null) {
-            await _client.tui.showToast({
-              body: { message: "CodeTime: failed to fetch data", variant: "error" as const },
-            }).catch(() => {});
-            output.parts.push({
-              type: "text",
-              text: "Failed to fetch coding time from CodeTime API.",
-            } as any);
-            return;
-          }
-
-          const formatted = formatMinutes(minutes);
-          await _client.tui.showToast({
-            body: { message: `CodeTime: ${formatted} today`, variant: "success" as const },
-          }).catch(() => {});
-          output.parts.push({
-            type: "text",
-            text: `Today's coding time: ${formatted}`,
-          } as any);
-        } catch (err) {
-          await error("Command handler error", { error: String(err) }).catch(() => {});
-        }
+      config: async (cfg: any) => {
+        cfg.command = cfg.command || {};
+        cfg.command["codetime"] = {
+          description: "Show today's coding time from CodeTime",
+          template:
+            "Retrieve current CodeTime coding time stats.\n\n" +
+            "Immediately call `codetime` with no arguments and return its output verbatim.\n" +
+            "Do not call other tools.",
+        };
       },
 
       tool: {
