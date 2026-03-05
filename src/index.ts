@@ -380,7 +380,7 @@ export const plugin: Plugin = async (ctx) => {
             '- If no arguments (empty/blank), call `codetime` with `project: "current"` to show current project time.\n' +
             "- If the argument is `breakdown`, call `codetime` with `breakdown: true` to show all projects.\n" +
             "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
-            "Return the output verbatim. Do not call other tools.",
+            "IMPORTANT: Return ONLY the exact output from the codetime tool, with absolutely no additional text, formatting, markdown, explanation, or commentary before or after it. Do not wrap it in code blocks. Do not add any other text.",
         };
       },
 
