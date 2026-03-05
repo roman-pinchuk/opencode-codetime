@@ -252,6 +252,15 @@ export const plugin: Plugin = async (ctx) => {
         "CODETIME_TOKEN not set. CodeTime tracking disabled. " +
           "Get your token from https://codetime.dev/dashboard/settings",
       ).catch(() => {});
+      try {
+        await (client as any).tui.showToast({
+          body: {
+            title: "CodeTime",
+            message: "CODETIME_TOKEN not set. Tracking disabled.",
+            variant: "error",
+          },
+        });
+      } catch {}
       return {};
     }
 
@@ -261,6 +270,15 @@ export const plugin: Plugin = async (ctx) => {
       await error(
         "Invalid CODETIME_TOKEN. Please check your token at https://codetime.dev/dashboard/settings",
       ).catch(() => {});
+      try {
+        await (client as any).tui.showToast({
+          body: {
+            title: "CodeTime",
+            message: "Invalid token. Check https://codetime.dev/dashboard/settings",
+            variant: "error",
+          },
+        });
+      } catch {}
       _token = null;
       return {};
     }
