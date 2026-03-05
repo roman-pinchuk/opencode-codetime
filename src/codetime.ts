@@ -118,3 +118,114 @@ export async function getTodayMinutes(
     return null;
   }
 }
+
+// ---- Response types for stats/top endpoints ----
+
+export interface StatsTimeData {
+  duration: number;
+  time: string;
+}
+
+export interface StatsTimeResponse {
+  data: StatsTimeData[];
+}
+
+export interface TopEntry {
+  field: string;
+  minutes: number;
+}
+
+/**
+ * Fetch coding minutes for a specific project using the stats_time endpoint.
+ * Returns total minutes for the project within the last 24 hours,
+ * or a custom time range if start/end are provided.
+ */
+export async function getProjectMinutes(
+  token: string,
+  project: string,
+): Promise<number | null> {
+  try {
+    const params = new URLSearchParams({
+      project,
+      unit: "minutes",
+      limit: "1440",
+    });
+
+    const response = await fetch(
+      `${API_BASE}/v3/users/self/stats_time?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      await logger.warn("Failed to fetch project minutes", {
+        status: response.status,
+        statusText: response.statusText,
+        project,
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as StatsTimeResponse;
+    // Sum all duration values from the response
+    const totalMinutes = data.data.reduce(
+      (sum, entry) => sum + entry.duration,
+      0,
+    );
+    return totalMinutes;
+  } catch (err) {
+    await logger.error("Project minutes request failed", {
+      error: String(err),
+      project,
+    });
+    return null;
+  }
+}
+
+/**
+ * Fetch top projects by coding time using the top endpoint.
+ * Returns a ranked list of projects with their minutes.
+ */
+export async function getTopProjects(
+  token: string,
+  minutes: number = 1440,
+): Promise<TopEntry[] | null> {
+  try {
+    const params = new URLSearchParams({
+      field: "workspace",
+      minutes: String(minutes),
+    });
+
+    const response = await fetch(
+      `${API_BASE}/v3/users/self/top?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      await logger.warn("Failed to fetch top projects", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as TopEntry[];
+    return data;
+  } catch (err) {
+    await logger.error("Top projects request failed", {
+      error: String(err),
+    });
+    return null;
+  }
+}

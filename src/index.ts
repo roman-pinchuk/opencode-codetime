@@ -6,6 +6,8 @@ import {
   sendHeartbeat,
   validateToken,
   getTodayMinutes,
+  getProjectMinutes,
+  getTopProjects,
   type EventLogRequest,
 } from "./codetime.js";
 import { getGitBranch, getGitOrigin } from "./git.js";
@@ -344,6 +346,13 @@ export const plugin: Plugin = async (ctx) => {
             "Immediately call `codetime` with no arguments and return its output verbatim.\n" +
             "Do not call other tools.",
         };
+        cfg.command["codetime-breakdown"] = {
+          description: "Show today's coding time breakdown by project",
+          template:
+            "Retrieve CodeTime coding time stats broken down by project.\n\n" +
+            'Immediately call `codetime` with `breakdown: true` and return its output verbatim.\n' +
+            "Do not call other tools.",
+        };
       },
 
       tool: {
@@ -351,14 +360,83 @@ export const plugin: Plugin = async (ctx) => {
           description:
             "Show today's coding time tracked by CodeTime. " +
             "Use this when the user asks about their coding time, " +
-            "how long they've been coding, or wants to see their CodeTime stats.",
-          args: {},
-          async execute() {
+            "how long they've been coding, or wants to see their CodeTime stats. " +
+            "Supports filtering by project name and showing a breakdown of time across all projects.",
+          args: {
+            project: tool.schema.string().optional().describe(
+              "Filter by project name. Use 'current' to auto-detect the current project. " +
+              "Omit to show total time across all projects.",
+            ),
+            breakdown: tool.schema.boolean().optional().describe(
+              "When true, show a breakdown of coding time across all projects today.",
+            ),
+          },
+          async execute(args) {
             if (!_token) {
               return "CodeTime is not configured. Set CODETIME_TOKEN environment variable to enable tracking. Get your token from https://codetime.dev/dashboard/settings";
             }
 
             try {
+              // Breakdown mode: show all projects ranked by time
+              if (args.breakdown) {
+                const projects = await getTopProjects(_token);
+                if (projects === null || projects.length === 0) {
+                  return "No project data available for today.";
+                }
+
+                // Calculate total
+                const totalMinutes = projects.reduce(
+                  (sum, p) => sum + p.minutes,
+                  0,
+                );
+
+                // Find the longest project name for alignment
+                const maxNameLen = Math.max(
+                  ...projects.map((p) => p.field.length),
+                  "Total".length,
+                );
+
+                const lines = ["Today's coding time by project:", ""];
+                for (const p of projects) {
+                  const name = p.field.padEnd(maxNameLen + 2);
+                  lines.push(`  ${name}${formatMinutes(p.minutes)}`);
+                }
+                lines.push(`  ${"─".repeat(maxNameLen + 2 + 8)}`);
+                lines.push(
+                  `  ${"Total".padEnd(maxNameLen + 2)}${formatMinutes(totalMinutes)}`,
+                );
+
+                return lines.join("\n");
+              }
+
+              // Project-specific mode
+              const projectName =
+                args.project === "current" ? _projectName : args.project;
+
+              if (projectName) {
+                // Fetch both project-specific and total in parallel
+                const [projectMins, totalMins] = await Promise.all([
+                  getProjectMinutes(_token, projectName),
+                  getTodayMinutes(_token),
+                ]);
+
+                if (projectMins === null) {
+                  return `Failed to fetch coding time for project "${projectName}" from CodeTime API.`;
+                }
+
+                const projectFormatted = formatMinutes(projectMins);
+                const displayName = args.project === "current"
+                  ? _projectName
+                  : projectName;
+
+                if (totalMins !== null) {
+                  const totalFormatted = formatMinutes(totalMins);
+                  return `Today's coding time for ${displayName}: ${projectFormatted} (Total across all projects: ${totalFormatted})`;
+                }
+                return `Today's coding time for ${displayName}: ${projectFormatted}`;
+              }
+
+              // Default: total coding time (original behavior)
               const minutes = await getTodayMinutes(_token);
               if (minutes === null) {
                 return "Failed to fetch coding time from CodeTime API.";

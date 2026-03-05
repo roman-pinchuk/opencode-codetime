@@ -14,9 +14,11 @@
 
 - **Automatic time tracking** -- sends coding events to CodeTime when OpenCode reads, edits, or writes files
 - **Check your coding time** -- ask the AI "what's my coding time?" and it fetches your stats via the `codetime` tool
+- **Per-project filtering** -- view coding time for the current project or any specific project
+- **Project breakdown** -- see a ranked table of all projects with time spent today
 - **Language detection** -- detects 90+ programming languages from file extensions
 - **Git integration** -- captures current branch and remote origin
-- **Project identification** -- shows as `[opencode] project-name` on your CodeTime dashboard
+- **Project identification** -- shows as `directory-name [opencode]` on your CodeTime dashboard
 - **Rate-limited** -- one heartbeat per 2 minutes to avoid API spam
 - **Session lifecycle** -- flushes pending events on session end so no data is lost
 - **Zero config** -- just set your token and go
@@ -91,7 +93,7 @@ Each heartbeat sent to CodeTime includes:
 |-------|-------|
 | `eventTime` | Unix timestamp of the event |
 | `language` | Detected from file extension (e.g. `TypeScript`, `Python`) |
-| `project` | `[opencode] directory-name` |
+| `project` | `directory-name [opencode]` |
 | `relativeFile` | File path relative to the project root |
 | `editor` | `opencode` |
 | `platform` | OS platform (`darwin`, `linux`, `windows`) |
@@ -105,6 +107,48 @@ Each heartbeat sent to CodeTime includes:
 | `event` | Listens for `message.part.updated` (tool completions) and `session.idle`/`session.deleted` (flush) |
 | `chat.message` | Processes pending heartbeats on chat activity |
 | `tool` | Registers `codetime` tool to check today's coding time |
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/codetime` | Show today's total coding time |
+| `/codetime-breakdown` | Show today's coding time broken down by project |
+
+### `codetime` tool
+
+The `codetime` tool supports optional arguments for project filtering:
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `project` | string (optional) | Filter by project name. Use `"current"` to auto-detect the current project. Omit to show total time. |
+| `breakdown` | boolean (optional) | When `true`, show a ranked breakdown of all projects. |
+
+**Usage examples** (in natural language to the AI):
+
+- "What's my coding time?" -- shows total time across all projects
+- "How long have I been coding on this project?" -- shows time for the current project
+- "Show me a breakdown of my coding time by project" -- shows ranked project list
+- "How much time did I spend on my-app today?" -- shows time for a specific project
+
+**Example outputs:**
+
+```
+# Total time (default)
+Today's coding time: 2h 42m
+
+# Current project
+Today's coding time for opencode-codetime [opencode]: 1h 23m (Total across all projects: 2h 42m)
+
+# Project breakdown
+Today's coding time by project:
+
+  opencode-codetime [opencode]    1h 23m
+  my-other-project [vscode]         52m
+  side-project [opencode]           27m
+  ──────────────────────────────────────
+  Total                           2h 42m
+```
 
 ### Tool tracking
 
@@ -121,7 +165,7 @@ Each heartbeat sent to CodeTime includes:
 ```
 src/
   index.ts        Main plugin entry point with event hooks
-  codetime.ts     CodeTime API client (token validation, heartbeats)
+  codetime.ts     CodeTime API client (token validation, heartbeats, stats)
   state.ts        Rate limiter (max 1 heartbeat per 2 minutes)
   language.ts     File extension to language name mapping
   git.ts          Git branch and remote origin extraction
