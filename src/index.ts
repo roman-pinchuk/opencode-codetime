@@ -342,16 +342,12 @@ export const plugin: Plugin = async (ctx) => {
         cfg.command["codetime"] = {
           description: "Show today's coding time from CodeTime",
           template:
-            "Retrieve current CodeTime coding time stats.\n\n" +
-            "Immediately call `codetime` with no arguments and return its output verbatim.\n" +
-            "Do not call other tools.",
-        };
-        cfg.command["codetime-breakdown"] = {
-          description: "Show today's coding time breakdown by project",
-          template:
-            "Retrieve CodeTime coding time stats broken down by project.\n\n" +
-            'Immediately call `codetime` with `breakdown: true` and return its output verbatim.\n' +
-            "Do not call other tools.",
+            "Retrieve CodeTime coding time stats.\n\n" +
+            "Based on the arguments provided: `$ARGUMENTS`\n\n" +
+            '- If no arguments (empty/blank), call `codetime` with `project: "current"` to show current project time.\n' +
+            "- If the argument is `breakdown`, call `codetime` with `breakdown: true` to show all projects.\n" +
+            "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
+            "Return the output verbatim. Do not call other tools.",
         };
       },
 
