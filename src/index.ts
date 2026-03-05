@@ -203,103 +203,122 @@ function pruneProcessedIds(): void {
 // ---- Plugin entry point ----
 
 export const plugin: Plugin = async (ctx) => {
-  const { client, directory, worktree, $ } = ctx;
+  try {
+    const { client, directory, worktree, $ } = ctx;
 
-  // Initialize logger
-  initLogger(client as Parameters<typeof initLogger>[0]);
+    // Initialize logger (may fail if client shape differs)
+    try {
+      initLogger(client as Parameters<typeof initLogger>[0]);
+    } catch {
+      // Logger init failed, continue without structured logging
+    }
 
-  // Read token from environment
-  _token = process.env.CODETIME_TOKEN ?? null;
-  if (!_token) {
-    await warn(
-      "CODETIME_TOKEN not set. CodeTime tracking disabled. " +
-        "Get your token from https://codetime.dev/dashboard/settings",
-    );
-    return {};
-  }
+    // Read token from environment
+    _token = process.env.CODETIME_TOKEN ?? null;
+    if (!_token) {
+      await warn(
+        "CODETIME_TOKEN not set. CodeTime tracking disabled. " +
+          "Get your token from https://codetime.dev/dashboard/settings",
+      ).catch(() => {});
+      return {};
+    }
 
-  // Validate token
-  const user = await validateToken(_token);
-  if (!user) {
-    await error(
-      "Invalid CODETIME_TOKEN. Please check your token at https://codetime.dev/dashboard/settings",
-    );
-    _token = null;
-    return {};
-  }
+    // Validate token
+    const user = await validateToken(_token);
+    if (!user) {
+      await error(
+        "Invalid CODETIME_TOKEN. Please check your token at https://codetime.dev/dashboard/settings",
+      ).catch(() => {});
+      _token = null;
+      return {};
+    }
 
-  await info(`CodeTime plugin initialized for user: ${user.username}`, {
-    plan: user.plan,
-  });
+    await info(`CodeTime plugin initialized for user: ${user.username}`, {
+      plan: user.plan,
+    }).catch(() => {});
 
-  // Initialize state
-  initState();
-  _projectDir = directory;
-  _worktree = worktree;
-  _projectName = path.basename(directory);
-  _platform = os.platform();
+    // Initialize state
+    initState();
+    _projectDir = directory;
+    _worktree = worktree;
+    _projectName = path.basename(directory);
+    _platform = os.platform();
 
-  // Fetch git info
-  if (worktree) {
-    const shellFn = $ as Parameters<typeof getGitOrigin>[0];
-    _gitOrigin = await getGitOrigin(shellFn, worktree);
-    _gitBranch = await getGitBranch(shellFn, worktree);
-    await debug("Git info", { origin: _gitOrigin, branch: _gitBranch });
-  }
+    // Fetch git info
+    if (worktree) {
+      const shellFn = $ as Parameters<typeof getGitOrigin>[0];
+      _gitOrigin = await getGitOrigin(shellFn, worktree);
+      _gitBranch = await getGitBranch(shellFn, worktree);
+      await debug("Git info", { origin: _gitOrigin, branch: _gitBranch }).catch(() => {});
+    }
 
-  return {
-    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
-      if (!_token) return;
+    return {
+      event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+        try {
+          if (!_token) return;
 
-      // Handle tool completions
-      if (isMessagePartUpdatedEvent(event)) {
-        const { part } = event.properties;
-        if (!("tool" in part) || part.type !== "tool") return;
+          // Handle tool completions
+          if (isMessagePartUpdatedEvent(event)) {
+            const { part } = event.properties;
+            if (!("tool" in part) || part.type !== "tool") return;
 
-        const toolPart = part as ToolPart;
-        if (toolPart.state.status !== "completed") return;
+            const toolPart = part as ToolPart;
+            if (toolPart.state.status !== "completed") return;
 
-        // Deduplicate
-        if (processedCallIds.has(toolPart.callID)) return;
-        processedCallIds.add(toolPart.callID);
-        pruneProcessedIds();
+            // Deduplicate
+            if (processedCallIds.has(toolPart.callID)) return;
+            processedCallIds.add(toolPart.callID);
+            pruneProcessedIds();
 
-        const { tool, state } = toolPart;
-        const metadata = state.metadata;
-        const output = state.output ?? "";
-        const title = state.title;
+            const { tool, state } = toolPart;
+            const metadata = state.metadata;
+            const output = state.output ?? "";
+            const title = state.title;
 
-        const files = extractFilesFromTool(tool, metadata, output, title);
+            const files = extractFilesFromTool(tool, metadata, output, title);
 
-        if (files.length > 0) {
-          for (const file of files) {
-            trackFile(file);
+            if (files.length > 0) {
+              for (const file of files) {
+                trackFile(file);
+              }
+              // Try to process heartbeats (rate limiter will throttle if needed)
+              await processHeartbeats();
+            }
           }
-          // Try to process heartbeats (rate limiter will throttle if needed)
-          await processHeartbeats();
+
+          // Handle session lifecycle - force flush
+          if (
+            event.type === "session.idle" ||
+            event.type === "session.deleted"
+          ) {
+            await debug("Session ending, flushing heartbeats", {
+              type: event.type,
+              pendingFiles: pendingFiles.size,
+            }).catch(() => {});
+            await processHeartbeats(true);
+          }
+        } catch (err) {
+          await error("Event handler error", { error: String(err) }).catch(() => {});
         }
-      }
+      },
 
-      // Handle session lifecycle - force flush
-      if (
-        event.type === "session.idle" ||
-        event.type === "session.deleted"
-      ) {
-        await debug("Session ending, flushing heartbeats", {
-          type: event.type,
-          pendingFiles: pendingFiles.size,
-        });
-        await processHeartbeats(true);
-      }
-    },
-
-    "chat.message": async () => {
-      // On any chat activity, try to process pending heartbeats
-      if (_token && pendingFiles.size > 0) {
-        await processHeartbeats();
-      }
-    },
-  };
+      "chat.message": async () => {
+        try {
+          // On any chat activity, try to process pending heartbeats
+          if (_token && pendingFiles.size > 0) {
+            await processHeartbeats();
+          }
+        } catch (err) {
+          await error("Chat message handler error", { error: String(err) }).catch(() => {});
+        }
+      },
+    };
+  } catch (err) {
+    // If anything goes wrong during plugin initialization,
+    // return empty hooks so OpenCode can continue without this plugin
+    console.error("[opencode-codetime] Plugin failed to initialize:", err);
+    return {};
+  }
 };
 
 export default plugin;
