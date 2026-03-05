@@ -26,7 +26,16 @@
     "time-tracking",
     "opencode-plugin"
   ],
+  "author": "Roman Pinchuk",
   "license": "MIT",
+  "homepage": "https://github.com/roman-pinchuk/opencode-codetime#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roman-pinchuk/opencode-codetime.git"
+  },
+  "bugs": {
+    "url": "https://github.com/roman-pinchuk/opencode-codetime/issues"
+  },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.0.0"
   },
