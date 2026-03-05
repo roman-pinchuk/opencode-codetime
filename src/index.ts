@@ -288,7 +288,7 @@ export const plugin: Plugin = async (ctx) => {
     initState();
     _projectDir = directory;
     _worktree = worktree;
-    _projectName = `${path.basename(directory)} [opencode]`;
+    _projectName = `${path.basename(directory)} opencode`;
     _platform = os.platform();
 
     return {
@@ -453,7 +453,7 @@ export const plugin: Plugin = async (ctx) => {
 
                 const projectFormatted = formatMinutes(projectMins);
                 const displayName = args.project === "current"
-                  ? _projectName
+                  ? formatProjectName(_projectName)
                   : projectName;
 
                 if (totalMins !== null) {
