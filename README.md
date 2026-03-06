@@ -8,7 +8,7 @@
 
 [CodeTime](https://codetime.dev) plugin for [OpenCode](https://github.com/anomalyco/opencode) -- track your AI coding activity and time spent.
 
-<img width="885" height="312" alt="image" src="https://github.com/user-attachments/assets/5f15a838-af86-4d4c-ab07-a9e467779bca" />
+<img width="1004" height="159" alt="image" src="https://github.com/user-attachments/assets/6db5b25a-889a-4be8-95b6-46aaaf08e482" />
 
 ## Features
 
