@@ -458,9 +458,9 @@ export const plugin: Plugin = async (ctx) => {
 
                 if (totalMins !== null) {
                   const totalFormatted = formatMinutes(totalMins);
-                  return `Today's coding time for ${displayName}: ${projectFormatted} (Total across all projects: ${totalFormatted})`;
+                  return `Today's coding time for ${displayName}:\n\`\`\`\n  ${projectFormatted} (Total across all projects: ${totalFormatted})\n\`\`\``;
                 }
-                return `Today's coding time for ${displayName}: ${projectFormatted}`;
+                return `Today's coding time for ${displayName}:\n\`\`\`\n  ${projectFormatted}\n\`\`\``;
               }
 
               // Default: total coding time (original behavior)
