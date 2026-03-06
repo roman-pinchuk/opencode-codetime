@@ -456,12 +456,11 @@ export const plugin: Plugin = async (ctx) => {
                   ? formatProjectName(_projectName)
                   : projectName;
 
-                const escapedName = displayName.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
                 if (totalMins !== null) {
                   const totalFormatted = formatMinutes(totalMins);
-                  return `Today's coding time for ${escapedName}: ${projectFormatted} (Total across all projects: ${totalFormatted})`;
+                  return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted} (Total across all projects: ${totalFormatted})\n\`\`\``;
                 }
-                return `Today's coding time for ${escapedName}: ${projectFormatted}`;
+                return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted}\n\`\`\``;
               }
 
               // Default: total coding time (original behavior)
