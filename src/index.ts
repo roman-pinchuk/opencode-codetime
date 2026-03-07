@@ -59,6 +59,7 @@ interface FileDiff {
 
 const processedCallIds = new Set<string>();
 const pendingFiles = new Map<string, { language: string; absoluteFile?: string }>();
+let lastActiveFile: string | null = null;
 
 let _token: string | null = null;
 let _projectName = "unknown";
@@ -199,6 +200,7 @@ function trackFile(filePath: string): void {
     language,
     absoluteFile: filePath,
   });
+  lastActiveFile = filePath;
 }
 
 // ---- Event guard ----
@@ -286,6 +288,7 @@ export const plugin: Plugin = async (ctx) => {
 
     // Initialize state
     initState();
+    lastActiveFile = null;
     _projectDir = directory;
     _worktree = worktree;
     _projectName = `${path.basename(directory)} opencode`;
@@ -343,7 +346,11 @@ export const plugin: Plugin = async (ctx) => {
 
       "chat.message": async () => {
         try {
-          // On any chat activity, try to process pending heartbeats
+          // On any chat activity, try to process pending heartbeats.
+          // Strict mode: only extend activity if a real file was previously touched.
+          if (_token && pendingFiles.size === 0 && lastActiveFile) {
+            trackFile(lastActiveFile);
+          }
           if (_token && pendingFiles.size > 0) {
             await processHeartbeats();
           }
