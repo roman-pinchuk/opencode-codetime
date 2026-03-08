@@ -240,13 +240,17 @@ function formatMinutes(minutes: number): string {
  * Otherwise, everything after the first space is treated as a suffix.
  * E.g. "test WSL: Ubuntu-24.04" → "test [WSL: Ubuntu-24.04]"
  */
-function formatProjectName(field: string): string {
+export function formatProjectName(field: string): string {
   if (field.includes("[")) return field;
   const spaceIdx = field.indexOf(" ");
   if (spaceIdx === -1) return field;
   const name = field.substring(0, spaceIdx);
   const suffix = field.substring(spaceIdx + 1);
   return `${name} [${suffix}]`;
+}
+
+export function buildProjectName(directory: string): string {
+  return `${path.basename(directory)} [opencode]`;
 }
 
 // ---- Plugin entry point ----
@@ -291,7 +295,7 @@ export const plugin: Plugin = async (ctx) => {
     lastActiveFile = null;
     _projectDir = directory;
     _worktree = worktree;
-    _projectName = `${path.basename(directory)} opencode`;
+    _projectName = buildProjectName(directory);
     _platform = os.platform();
 
     return {
