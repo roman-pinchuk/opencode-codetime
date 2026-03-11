@@ -364,8 +364,8 @@ export const plugin: Plugin = async (ctx) => {
       },
 
       config: async (cfg: any) => {
-        cfg.commands = cfg.commands || {};
-        cfg.commands["codetime"] = {
+        cfg.command = cfg.command || {};
+        cfg.command["codetime"] = {
           description: "Show today's coding time from CodeTime",
           template:
             "Retrieve CodeTime coding time stats.\n\n" +
@@ -375,19 +375,6 @@ export const plugin: Plugin = async (ctx) => {
             "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
             "IMPORTANT: Return ONLY the exact output from the codetime tool, with absolutely no additional text, formatting, markdown, explanation, or commentary before or after it. Do not wrap it in code blocks. Do not add any other text.",
         };
-      },
-
-      commands: {
-        codetime: {
-          description: "Show today's coding time from CodeTime",
-          template:
-            "Retrieve CodeTime coding time stats.\n\n" +
-            "Based on the arguments provided: `$ARGUMENTS`\n\n" +
-            '- If no arguments (empty/blank), call `codetime` with `project: "current"` to show current project time.\n' +
-            "- If the argument is `breakdown`, call `codetime` with `breakdown: true` to show all projects.\n" +
-            "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
-            "IMPORTANT: Return ONLY the exact output from the codetime tool, with absolutely no additional text, formatting, markdown, explanation, or commentary before or after it. Do not wrap it in code blocks. Do not add any other text.",
-        },
       },
 
       tool: {

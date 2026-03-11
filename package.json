@@ -38,11 +38,11 @@
     "url": "https://github.com/roman-pinchuk/opencode-codetime/issues"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.0.0"
+    "@opencode-ai/plugin": "^1.2.24"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.0.0",
-    "@types/node": "^25.3.3",
-    "typescript": "^5.0.0"
+    "@opencode-ai/plugin": "1.2.24",
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
   }
 }
