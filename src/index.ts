@@ -256,245 +256,240 @@ export function buildProjectName(directory: string): string {
 // ---- Plugin entry point ----
 
 export const plugin: Plugin = async (ctx) => {
+  console.info("[opencode-codetime] Initializing plugin...");
+  const { client, directory, worktree } = ctx;
+
+  // Initialize logger (may fail if client shape differs)
   try {
-    const { client, directory, worktree } = ctx;
+    initLogger(client as Parameters<typeof initLogger>[0]);
+  } catch {
+    // Logger init failed, continue without structured logging
+  }
 
-    // Initialize logger (may fail if client shape differs)
-    try {
-      initLogger(client as Parameters<typeof initLogger>[0]);
-    } catch {
-      // Logger init failed, continue without structured logging
-    }
-
-    // Read token from environment
-    _token = process.env.CODETIME_TOKEN ?? null;
-    if (!_token) {
-      await warn(
-        "CODETIME_TOKEN not set. CodeTime tracking disabled. " +
-          "Get your token from https://codetime.dev/dashboard/settings",
-      ).catch(() => {});
-      return {};
-    }
-
-    // Validate token
-    const user = await validateToken(_token);
-    if (!user) {
-      await error(
-        "Invalid CODETIME_TOKEN. Please check your token at https://codetime.dev/dashboard/settings",
-      ).catch(() => {});
-      _token = null;
-      return {};
-    }
-
-    await info(`CodeTime plugin initialized for user: ${user.username}`, {
-      plan: user.plan,
-    }).catch(() => {});
-
-    // Initialize state
-    initState();
-    lastActiveFile = null;
-    _projectDir = directory;
-    _worktree = worktree;
-    _projectName = buildProjectName(directory);
-    _platform = os.platform();
-
-    return {
-      event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
-        try {
-          if (!_token) return;
-
-          // Handle tool completions
-          if (isMessagePartUpdatedEvent(event)) {
-            const { part } = event.properties;
-            if (!("tool" in part) || part.type !== "tool") return;
-
-            const toolPart = part as ToolPart;
-            if (toolPart.state.status !== "completed") return;
-
-            // Deduplicate
-            if (processedCallIds.has(toolPart.callID)) return;
-            processedCallIds.add(toolPart.callID);
-            pruneProcessedIds();
-
-            const { tool, state } = toolPart;
-            const metadata = state.metadata;
-            const output = state.output ?? "";
-            const title = state.title;
-
-            const files = extractFilesFromTool(tool, metadata, output, title);
-
-            if (files.length > 0) {
-              for (const file of files) {
-                trackFile(file);
-              }
-              // Try to process heartbeats (rate limiter will throttle if needed)
-              await processHeartbeats();
-            }
-          }
-
-          // Handle session lifecycle - force flush
-          if (
-            event.type === "session.idle" ||
-            event.type === "session.deleted"
-          ) {
-            await debug("Session ending, flushing heartbeats", {
-              type: event.type,
-              pendingFiles: pendingFiles.size,
-            }).catch(() => {});
-            await processHeartbeats(true);
-          }
-        } catch (err) {
-          await error("Event handler error", { error: String(err) }).catch(() => {});
-        }
-      },
-
-      "chat.message": async () => {
-        try {
-          // On any chat activity, try to process pending heartbeats.
-          // Strict mode: only extend activity if a real file was previously touched.
-          if (_token && pendingFiles.size === 0 && lastActiveFile) {
-            trackFile(lastActiveFile);
-          }
-          if (_token && pendingFiles.size > 0) {
-            await processHeartbeats();
-          }
-        } catch (err) {
-          await error("Chat message handler error", { error: String(err) }).catch(() => {});
-        }
-      },
-
-      config: async (cfg: any) => {
-        cfg.command = cfg.command || {};
-        cfg.command["codetime"] = {
-          description: "Show today's coding time from CodeTime",
-          template:
-            "Retrieve CodeTime coding time stats.\n\n" +
-            "Based on the arguments provided: `$ARGUMENTS`\n\n" +
-            '- If no arguments (empty/blank), call `codetime` with `project: "current"` to show current project time.\n' +
-            "- If the argument is `breakdown`, call `codetime` with `breakdown: true` to show all projects.\n" +
-            "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
-            "IMPORTANT: Return ONLY the exact output from the codetime tool, with absolutely no additional text, formatting, markdown, explanation, or commentary before or after it. Do not wrap it in code blocks. Do not add any other text.",
-        };
-      },
-
-      tool: {
-        codetime: tool({
-          description:
-            "Show today's coding time tracked by CodeTime. " +
-            "Use this when the user asks about their coding time, " +
-            "how long they've been coding, or wants to see their CodeTime stats. " +
-            "Supports filtering by project name and showing a breakdown of time across all projects.",
-          args: {
-            project: tool.schema.string().optional().describe(
-              "Filter by project name. Use 'current' to auto-detect the current project. " +
-              "Omit to show total time across all projects.",
-            ),
-            breakdown: tool.schema.boolean().optional().describe(
-              "When true, show a breakdown of coding time across all projects today.",
-            ),
-          },
-          async execute(args) {
-            if (!_token) {
-              return "CodeTime is not configured. Set CODETIME_TOKEN environment variable to enable tracking. Get your token from https://codetime.dev/dashboard/settings";
-            }
-
-            try {
-              // Breakdown mode: show all projects ranked by time
-              if (args.breakdown) {
-                const projects = await getTopProjects(_token);
-                if (projects === null || projects.length === 0) {
-                  return "No project data available for today.";
-                }
-
-                // Calculate total
-                const totalMinutes = projects.reduce(
-                  (sum, p) => sum + p.minutes,
-                  0,
-                );
-
-                // Pre-compute display names and formatted times
-                const displayNames = projects.map((p) =>
-                  formatProjectName(p.field),
-                );
-                const formattedTimes = projects.map((p) =>
-                  formatMinutes(p.minutes),
-                );
-                const totalTime = formatMinutes(totalMinutes);
-
-                // Find the longest display name and time for alignment
-                const maxNameLen = Math.max(
-                  ...displayNames.map((n) => n.length),
-                  "Total".length,
-                );
-                const maxTimeLen = Math.max(
-                  ...formattedTimes.map((t) => t.length),
-                  totalTime.length,
-                );
-
-                const lines = ["Today's coding time by project:", ""];
-                for (let i = 0; i < projects.length; i++) {
-                  const name = displayNames[i].padEnd(maxNameLen + 2);
-                  const time = formattedTimes[i].padStart(maxTimeLen);
-                  lines.push(`  ${name}${time}`);
-                }
-                lines.push(`  ${"─".repeat(maxNameLen + 2 + maxTimeLen)}`);
-                lines.push(
-                  `  ${"Total".padEnd(maxNameLen + 2)}${totalTime.padStart(maxTimeLen)}`,
-                );
-
-                const header = lines[0];
-                const table = lines.slice(1).join("\n");
-                return `${header}\n\`\`\`\n${table}\n\`\`\``;
-              }
-
-              // Project-specific mode
-              const projectName =
-                args.project === "current" ? _projectName : args.project;
-
-              if (projectName) {
-                // Fetch both project-specific and total in parallel
-                const [projectMins, totalMins] = await Promise.all([
-                  getProjectMinutes(_token, projectName),
-                  getTodayMinutes(_token),
-                ]);
-
-                if (projectMins === null) {
-                  return `Failed to fetch coding time for project "${projectName}" from CodeTime API.`;
-                }
-
-                const projectFormatted = formatMinutes(projectMins);
-                const displayName = args.project === "current"
-                  ? formatProjectName(_projectName)
-                  : projectName;
-
-                if (totalMins !== null) {
-                  const totalFormatted = formatMinutes(totalMins);
-                  return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted} (Total across all projects: ${totalFormatted})\n\`\`\``;
-                }
-                return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted}\n\`\`\``;
-              }
-
-              // Default: total coding time (original behavior)
-              const minutes = await getTodayMinutes(_token);
-              if (minutes === null) {
-                return "Failed to fetch coding time from CodeTime API.";
-              }
-
-              const formatted = formatMinutes(minutes);
-              return `Today's coding time: ${formatted}`;
-            } catch (err) {
-              return `Failed to fetch coding time: ${String(err)}`;
-            }
-          },
-        }),
-      },
-    };
-  } catch (err) {
-    // If anything goes wrong during plugin initialization,
-    // return empty hooks so OpenCode can continue without this plugin
-    console.error("[opencode-codetime] Plugin failed to initialize:", err);
+  // Read token from environment
+  _token = process.env.CODETIME_TOKEN ?? null;
+  if (!_token) {
+    console.warn("[opencode-codetime] CODETIME_TOKEN not set.");
+    await warn(
+      "CODETIME_TOKEN not set. CodeTime tracking disabled. " +
+        "Get your token from https://codetime.dev/dashboard/settings",
+    ).catch(() => {});
     return {};
   }
-};
 
-export default plugin;
+  // Validate token
+  const user = await validateToken(_token);
+  if (!user) {
+    console.error("[opencode-codetime] Invalid CODETIME_TOKEN.");
+    await error(
+      "Invalid CODETIME_TOKEN. Please check your token at https://codetime.dev/dashboard/settings",
+    ).catch(() => {});
+    _token = null;
+    return {};
+  }
+
+  console.info(`[opencode-codetime] Initialized for user: ${user.username}`);
+  await info(`CodeTime plugin initialized for user: ${user.username}`, {
+    plan: user.plan,
+  }).catch(() => {});
+
+  // Initialize state
+  initState();
+  lastActiveFile = null;
+  _projectDir = directory;
+  _worktree = worktree;
+  _projectName = buildProjectName(directory);
+  _platform = os.platform();
+
+  return {
+    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+      try {
+        if (!_token) return;
+
+        // Handle tool completions
+        if (isMessagePartUpdatedEvent(event)) {
+          const { part } = event.properties;
+          if (!("tool" in part) || part.type !== "tool") return;
+
+          const toolPart = part as ToolPart;
+          if (toolPart.state.status !== "completed") return;
+
+          // Deduplicate
+          if (processedCallIds.has(toolPart.callID)) return;
+          processedCallIds.add(toolPart.callID);
+          pruneProcessedIds();
+
+          const { tool, state } = toolPart;
+          const metadata = state.metadata;
+          const output = state.output ?? "";
+          const title = state.title;
+
+          const files = extractFilesFromTool(tool, metadata, output, title);
+
+          if (files.length > 0) {
+            for (const file of files) {
+              trackFile(file);
+            }
+            // Try to process heartbeats (rate limiter will throttle if needed)
+            await processHeartbeats();
+          }
+        }
+
+        // Handle session lifecycle - force flush
+        if (
+          event.type === "session.idle" ||
+          event.type === "session.deleted"
+        ) {
+          await debug("Session ending, flushing heartbeats", {
+            type: event.type,
+            pendingFiles: pendingFiles.size,
+          }).catch(() => {});
+          await processHeartbeats(true);
+        }
+      } catch (err) {
+        await error("Event handler error", { error: String(err) }).catch(() => {});
+      }
+    },
+
+    "chat.message": async () => {
+      try {
+        // On any chat activity, try to process pending heartbeats.
+        // Strict mode: only extend activity if a real file was previously touched.
+        if (_token && pendingFiles.size === 0 && lastActiveFile) {
+          trackFile(lastActiveFile);
+        }
+        if (_token && pendingFiles.size > 0) {
+          await processHeartbeats();
+        }
+      } catch (err) {
+        await error("Chat message handler error", { error: String(err) }).catch(() => {});
+      }
+    },
+
+    config: async (cfg: any) => {
+      cfg.command = cfg.command || {};
+      cfg.command["codetime"] = {
+        description: "Show today's coding time from CodeTime",
+        template:
+          "Retrieve CodeTime coding time stats.\n\n" +
+          "Based on the arguments provided: `$ARGUMENTS`\n\n" +
+          '- If no arguments (empty/blank), call `codetime` with `project: "current"` to show current project time.\n' +
+          "- If the argument is `breakdown`, call `codetime` with `breakdown: true` to show all projects.\n" +
+          "- Otherwise, call `codetime` with `project` set to the argument value to show that specific project's time.\n\n" +
+          "IMPORTANT: Return ONLY the exact output from the codetime tool, with absolutely no additional text, formatting, markdown, explanation, or commentary before or after it. Do not wrap it in code blocks. Do not add any other text.",
+      };
+    },
+
+    tool: {
+      codetime: tool({
+        description:
+          "Show today's coding time tracked by CodeTime. " +
+          "Use this when the user asks about their coding time, " +
+          "how long they've been coding, or wants to see their CodeTime stats. " +
+          "Supports filtering by project name and showing a breakdown of time across all projects.",
+        args: {
+          project: tool.schema.string().optional().describe(
+            "Filter by project name. Use 'current' to auto-detect the current project. " +
+            "Omit to show total time across all projects.",
+          ),
+          breakdown: tool.schema.boolean().optional().describe(
+            "When true, show a breakdown of coding time across all projects today.",
+          ),
+        },
+        async execute(args) {
+          if (!_token) {
+            return "CodeTime is not configured. Set CODETIME_TOKEN environment variable to enable tracking. Get your token from https://codetime.dev/dashboard/settings";
+          }
+
+          try {
+            // Breakdown mode: show all projects ranked by time
+            if (args.breakdown) {
+              const projects = await getTopProjects(_token);
+              if (projects === null || projects.length === 0) {
+                return "No project data available for today.";
+              }
+
+              // Calculate total
+              const totalMinutes = projects.reduce(
+                (sum, p) => sum + p.minutes,
+                0,
+              );
+
+              // Pre-compute display names and formatted times
+              const displayNames = projects.map((p) =>
+                formatProjectName(p.field),
+              );
+              const formattedTimes = projects.map((p) =>
+                formatMinutes(p.minutes),
+              );
+              const totalTime = formatMinutes(totalMinutes);
+
+              // Find the longest display name and time for alignment
+              const maxNameLen = Math.max(
+                ...displayNames.map((n) => n.length),
+                "Total".length,
+              );
+              const maxTimeLen = Math.max(
+                ...formattedTimes.map((t) => t.length),
+                totalTime.length,
+              );
+
+              const lines = ["Today's coding time by project:", ""];
+              for (let i = 0; i < projects.length; i++) {
+                const name = displayNames[i].padEnd(maxNameLen + 2);
+                const time = formattedTimes[i].padStart(maxTimeLen);
+                lines.push(`  ${name}${time}`);
+              }
+              lines.push(`  ${"─".repeat(maxNameLen + 2 + maxTimeLen)}`);
+              lines.push(
+                `  ${"Total".padEnd(maxNameLen + 2)}${totalTime.padStart(maxTimeLen)}`,
+              );
+
+              const header = lines[0];
+              const table = lines.slice(1).join("\n");
+              return `${header}\n\`\`\`\n${table}\n\`\`\``;
+            }
+
+            // Project-specific mode
+            const projectName =
+              args.project === "current" ? _projectName : args.project;
+
+            if (projectName) {
+              // Fetch both project-specific and total in parallel
+              const [projectMins, totalMins] = await Promise.all([
+                getProjectMinutes(_token, projectName),
+                getTodayMinutes(_token),
+              ]);
+
+              if (projectMins === null) {
+                return `Failed to fetch coding time for project "${projectName}" from CodeTime API.`;
+              }
+
+              const projectFormatted = formatMinutes(projectMins);
+              const displayName = args.project === "current"
+                ? formatProjectName(_projectName)
+                : projectName;
+
+              if (totalMins !== null) {
+                const totalFormatted = formatMinutes(totalMins);
+                return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted} (Total across all projects: ${totalFormatted})\n\`\`\``;
+              }
+              return `\`\`\`\nToday's coding time for ${displayName}: ${projectFormatted}\n\`\`\``;
+            }
+
+            // Default: total coding time (original behavior)
+            const minutes = await getTodayMinutes(_token);
+            if (minutes === null) {
+              return "Failed to fetch coding time from CodeTime API.";
+            }
+
+            const formatted = formatMinutes(minutes);
+            return `Today's coding time: ${formatted}`;
+          } catch (err) {
+            return `Failed to fetch coding time: ${String(err)}`;
+          }
+        },
+      }),
+    },
+  };
+};
