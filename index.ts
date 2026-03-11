@@ -9,15 +9,15 @@ import {
   getProjectMinutes,
   getTopProjects,
   type EventLogRequest,
-} from "./codetime.js";
-import { getGitBranch, getGitOrigin } from "./git.js";
-import { detectLanguage } from "./language.js";
-import { initLogger, info, warn, error, debug } from "./logger.js";
+} from "./src/codetime.js";
+import { getGitBranch, getGitOrigin } from "./src/git.js";
+import { detectLanguage } from "./src/language.js";
+import { initLogger, info, warn, error, debug } from "./src/logger.js";
 import {
   initState,
   shouldSendHeartbeat,
   updateLastHeartbeat,
-} from "./state.js";
+} from "./src/state.js";
 
 // ---- Type definitions for OpenCode events ----
 

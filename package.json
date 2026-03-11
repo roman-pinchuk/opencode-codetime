@@ -3,22 +3,17 @@
   "version": "0.7.4",
   "description": "CodeTime plugin for OpenCode - Track AI coding activity and time spent with codetime.dev",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "module": "index.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+    ".": "./index.ts"
   },
   "files": [
-    "dist"
+    "index.ts",
+    "src"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "npm run build && node --test dist/**/*.test.js",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "test": "node --test index.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "opencode",
