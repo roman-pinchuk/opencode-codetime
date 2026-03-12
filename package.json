@@ -1,6 +1,6 @@
 {
   "name": "opencode-codetime",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "CodeTime plugin for OpenCode - Track AI coding activity and time spent with codetime.dev",
   "type": "module",
   "main": "dist/index.js",
